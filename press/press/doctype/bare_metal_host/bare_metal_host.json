@@ -1,0 +1,208 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:hostname",
+ "creation": "2024-07-15 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "hostname",
+  "title",
+  "status",
+  "column_break_3",
+  "ip",
+  "private_ip",
+  "system_section",
+  "total_cpu",
+  "total_memory",
+  "total_disk",
+  "column_break_9",
+  "available_cpu",
+  "available_memory",
+  "available_disk",
+  "os_info",
+  "section_break_14",
+  "ssh_user",
+  "ssh_port",
+  "column_break_17",
+  "is_vm_host"
+ ],
+ "fields": [
+  {
+   "fieldname": "hostname",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Hostname",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "default": "Pending",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "\nPending\nActive\nProvisioning\nError\nMaintenance",
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ip",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "IP Address",
+   "reqd": 1
+  },
+  {
+   "fieldname": "private_ip",
+   "fieldtype": "Data",
+   "label": "Private IP"
+  },
+  {
+   "fieldname": "system_section",
+   "fieldtype": "Section Break",
+   "label": "System"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_cpu",
+   "fieldtype": "Int",
+   "label": "Total CPU Cores",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_memory",
+   "fieldtype": "Int",
+   "label": "Total Memory (MB)",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_disk",
+   "fieldtype": "Float",
+   "label": "Total Disk Space (GB)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_9",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "available_cpu",
+   "fieldtype": "Int",
+   "label": "Available CPU Cores",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "available_memory",
+   "fieldtype": "Int",
+   "label": "Available Memory (MB)",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "available_disk",
+   "fieldtype": "Float",
+   "label": "Available Disk Space (GB)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "os_info",
+   "fieldtype": "Data",
+   "label": "OS Information"
+  },
+  {
+   "fieldname": "section_break_14",
+   "fieldtype": "Section Break",
+   "label": "SSH Connection"
+  },
+  {
+   "default": "root",
+   "fieldname": "ssh_user",
+   "fieldtype": "Data",
+   "label": "SSH User",
+   "reqd": 1
+  },
+  {
+   "default": "22",
+   "fieldname": "ssh_port",
+   "fieldtype": "Int",
+   "label": "SSH Port",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_17",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_vm_host",
+   "fieldtype": "Check",
+   "label": "Is VM Host"
+  }
+ ],
+ "links": [],
+ "modified": "2024-07-15 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Press",
+ "name": "Bare Metal Host",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Press Admin",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+} 
