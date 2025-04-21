@@ -4,6 +4,8 @@
 import frappe
 import json
 import os
+import subprocess
+import time
 from frappe.model.document import Document
 from press.utils import log_error
 from press.runner import Ansible
@@ -12,6 +14,7 @@ from press.runner import Ansible
 class BareMetalHost(Document):
 	def validate(self):
 		self.validate_ip_uniqueness()
+		self.validate_ssh_key()
 
 	def validate_ip_uniqueness(self):
 		"""Ensure IP address is not already used by another host"""
@@ -20,6 +23,11 @@ class BareMetalHost(Document):
 
 		if frappe.db.exists("Bare Metal Host", {"ip": self.ip, "name": ["!=", self.name]}):
 			frappe.throw(f"IP address {self.ip} is already used by another host")
+
+	def validate_ssh_key(self):
+		"""Validate that SSH key exists if SSH key auth is enabled"""
+		if self.auth_method == "SSH Key" and not self.ssh_key:
+			frappe.throw("SSH Key is required when using SSH Key authentication")
 
 	@frappe.whitelist()
 	def provision_host(self):
@@ -254,4 +262,59 @@ class BareMetalHost(Document):
 				"memory_mb": memory_mb,
 				"disk_gb": disk_gb
 			}
-		} 
+		}
+
+	@frappe.whitelist()
+	def check_health(self):
+		"""Check if the host is reachable and services are running properly"""
+		try:
+			# Create a dummy server document for Ansible
+			dummy_server = frappe._dict({
+				"doctype": "Bare Metal Host",
+				"name": self.name,
+				"ip": self.ip
+			})
+			
+			# Create variables for the playbook
+			variables = {
+				"host_ip": self.ip,
+				"ssh_user": self.ssh_user,
+				"ssh_port": self.ssh_port
+			}
+			
+			# Run a simple ping command using Ansible
+			ansible = Ansible(
+				server=dummy_server,
+				module="ping",
+				user=self.ssh_user,
+				variables=variables,
+				port=self.ssh_port
+			)
+			
+			result = ansible.run()
+			
+			if result.status == "Success":
+				self.last_health_check = frappe.utils.now()
+				self.health_status = "Healthy"
+				self.save()
+				return {"status": "Success", "message": f"Host {self.hostname} is healthy"}
+			else:
+				self.health_status = "Unhealthy"
+				self.save()
+				log_error(
+					"Host Health Check Error",
+					host=self.hostname,
+					ip=self.ip,
+					error=result.exception,
+				)
+				return {"status": "Error", "message": f"Host health check failed: {result.exception}"}
+		except Exception as e:
+			self.health_status = "Unhealthy"
+			self.save()
+			log_error(
+				"Host Health Check Exception",
+				host=self.hostname,
+				ip=self.ip,
+				error=str(e),
+			)
+			return {"status": "Error", "message": f"Exception during health check: {str(e)}"} 
