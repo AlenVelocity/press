@@ -8,6 +8,9 @@
     host_ip: "{{ host_ip }}"
     ssh_user: "{{ ssh_user }}"
     ssh_port: "{{ ssh_port }}"
+    enable_bandwidth_control: "{{ enable_bandwidth_control | default(false) }}"
+    enable_advanced_firewall: "{{ enable_advanced_firewall | default(false) }}"
+    allowed_ports: "{{ allowed_ports | default([80, 443]) }}"
 
   roles:
     - role: setup_essentials
@@ -36,6 +39,9 @@
           - wget
           - vim
           - unzip
+          - iperf3
+          - nftables
+          - wondershaper
         state: present
 
     - name: Install security packages
@@ -55,6 +61,77 @@
         rule: allow
         port: "{{ ssh_port }}"
         proto: tcp
+
+    - name: Allow additional ports if specified
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: "{{ allowed_ports }}"
+      when: allowed_ports is defined
+
+    # Advanced networking configurations
+    - name: Check network interfaces
+      shell: ip -o link show | awk -F': ' '{print $2}'
+      register: network_interfaces
+      changed_when: false
+      when: enable_bandwidth_control
+
+    - name: Configure bandwidth control with wondershaper
+      shell: wondershaper -a {{ item }} -d 1000000 -u 500000
+      with_items: "{{ network_interfaces.stdout_lines }}"
+      when: 
+        - enable_bandwidth_control 
+        - item != 'lo'
+      ignore_errors: yes
+
+    - name: Setup advanced firewall with nftables
+      block:
+        - name: Create nftables.conf file
+          copy:
+            dest: /etc/nftables.conf
+            content: |
+              #!/usr/sbin/nft -f
+              
+              flush ruleset
+              
+              table inet filter {
+                chain input {
+                  type filter hook input priority 0;
+                  
+                  # Accept loopback traffic
+                  iif lo accept
+                  
+                  # Accept established and related connections
+                  ct state established,related accept
+                  
+                  # Accept SSH
+                  tcp dport {{ ssh_port }} accept
+                  
+                  # Accept HTTP and HTTPS
+                  tcp dport {80, 443} accept
+                  
+                  # Drop all other incoming traffic
+                  drop
+                }
+                
+                chain forward {
+                  type filter hook forward priority 0;
+                  drop
+                }
+                
+                chain output {
+                  type filter hook output priority 0;
+                  accept
+                }
+              }
+            mode: '0640'
+          
+        - name: Enable and start nftables service
+          systemd:
+            name: nftables
+            enabled: yes
+            state: started
 
     - name: Enable fail2ban for SSH
       copy:
@@ -99,6 +176,11 @@
         - { name: 'net.core.somaxconn', value: '65535' }
         - { name: 'net.ipv4.tcp_max_syn_backlog', value: '65535' }
         - { name: 'net.ipv4.ip_local_port_range', value: '1024 65535' }
+        - { name: 'net.ipv4.tcp_slow_start_after_idle', value: '0' }
+        - { name: 'net.ipv4.tcp_fin_timeout', value: '15' }
+        - { name: 'net.ipv4.tcp_keepalive_time', value: '60' }
+        - { name: 'net.ipv4.tcp_keepalive_intvl', value: '10' }
+        - { name: 'net.ipv4.tcp_keepalive_probes', value: '6' }
 
   handlers:
     - name: Restart SSH
