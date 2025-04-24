@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import time
+import datetime
 from frappe.model.document import Document
 from press.utils import log_error
 from press.runner import Ansible
@@ -317,4 +318,140 @@ class BareMetalHost(Document):
 				ip=self.ip,
 				error=str(e),
 			)
-			return {"status": "Error", "message": f"Exception during health check: {str(e)}"} 
+			return {"status": "Error", "message": f"Exception during health check: {str(e)}"}
+
+	@frappe.whitelist()
+	def setup_backup(self, backup_schedule="0 2 * * *", backup_retention=7, backup_destination=None):
+		"""Configure automated backups for the host"""
+		if self.status not in ["Active"]:
+			frappe.throw(f"Host must be Active to configure backups. Current status: {self.status}")
+
+		self.status = "Provisioning"
+		self.save()
+
+		try:
+			# Create a dummy server document for Ansible
+			dummy_server = frappe._dict({
+				"doctype": "Bare Metal Host",
+				"name": self.name,
+				"ip": self.ip
+			})
+			
+			# Create variables for the playbook
+			variables = {
+				"host_ip": self.ip,
+				"ssh_user": self.ssh_user,
+				"ssh_port": self.ssh_port,
+				"backup_schedule": backup_schedule,
+				"backup_retention": backup_retention,
+				"backup_destination": backup_destination or "/var/backups/bare-metal"
+			}
+			
+			# Run the backup setup playbook
+			playbook_name = "setup_backup.yml"
+			
+			# Run the playbook
+			ansible = Ansible(
+				server=dummy_server,
+				playbook=playbook_name,
+				user=self.ssh_user, 
+				variables=variables,
+				port=self.ssh_port
+			)
+			
+			play_doc = ansible.run()
+			
+			if play_doc.status == "Success":
+				self.has_backup = 1
+				self.backup_schedule = backup_schedule
+				self.backup_retention = backup_retention
+				self.backup_destination = backup_destination or "/var/backups/bare-metal"
+				self.last_backup = None
+				self.status = "Active"
+				self.save()
+				
+				return {"status": "Success", "message": f"Host {self.hostname} backup configured successfully"}
+			else:
+				self.status = "Error"
+				self.save()
+				log_error(
+					"Backup Setup Error",
+					host=self.hostname,
+					ip=self.ip,
+					error=play_doc.exception,
+				)
+				return {"status": "Error", "message": f"Failed to configure backup: {play_doc.exception}"}
+				
+		except Exception as e:
+			self.status = "Error"
+			self.save()
+			log_error(
+				"Backup Setup Exception",
+				host=self.hostname,
+				ip=self.ip,
+				error=str(e),
+			)
+			return {"status": "Error", "message": f"Exception while configuring backup: {str(e)}"}
+
+	@frappe.whitelist()
+	def trigger_backup(self):
+		"""Manually trigger a backup"""
+		if not self.has_backup:
+			frappe.throw("Backup is not configured for this host")
+			
+		if self.status not in ["Active"]:
+			frappe.throw(f"Host must be Active to run backup. Current status: {self.status}")
+
+		try:
+			# Create a dummy server document for Ansible
+			dummy_server = frappe._dict({
+				"doctype": "Bare Metal Host",
+				"name": self.name,
+				"ip": self.ip
+			})
+			
+			# Create variables for the playbook
+			variables = {
+				"host_ip": self.ip,
+				"ssh_user": self.ssh_user,
+				"ssh_port": self.ssh_port,
+				"backup_destination": self.backup_destination or "/var/backups/bare-metal",
+				"manual_trigger": True
+			}
+			
+			# Run the backup now playbook
+			playbook_name = "trigger_backup.yml"
+			
+			# Run the playbook
+			ansible = Ansible(
+				server=dummy_server,
+				playbook=playbook_name,
+				user=self.ssh_user, 
+				variables=variables,
+				port=self.ssh_port
+			)
+			
+			play_doc = ansible.run()
+			
+			if play_doc.status == "Success":
+				self.last_backup = frappe.utils.now()
+				self.save()
+				
+				return {"status": "Success", "message": f"Backup triggered successfully for {self.hostname}"}
+			else:
+				log_error(
+					"Backup Trigger Error",
+					host=self.hostname,
+					ip=self.ip,
+					error=play_doc.exception,
+				)
+				return {"status": "Error", "message": f"Failed to trigger backup: {play_doc.exception}"}
+				
+		except Exception as e:
+			log_error(
+				"Backup Trigger Exception",
+				host=self.hostname,
+				ip=self.ip,
+				error=str(e),
+			)
+			return {"status": "Error", "message": f"Exception while triggering backup: {str(e)}"} 
