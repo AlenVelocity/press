@@ -7,6 +7,8 @@ import os
 import subprocess
 import time
 import datetime
+import secrets
+import math
 from frappe.model.document import Document
 from press.utils import log_error
 from press.runner import Ansible
@@ -454,4 +456,125 @@ class BareMetalHost(Document):
 				ip=self.ip,
 				error=str(e),
 			)
-			return {"status": "Error", "message": f"Exception while triggering backup: {str(e)}"} 
+			return {"status": "Error", "message": f"Exception while triggering backup: {str(e)}"}
+
+	@frappe.whitelist()
+	def allocate_resources(self, purpose, cpu=0, memory_mb=0, disk_gb=0, allocation_reference=None):
+		"""Allocate resources on the host for a specific purpose"""
+		if self.status not in ["Active"]:
+			frappe.throw(f"Host must be Active to allocate resources. Current status: {self.status}")
+			
+		# Validate resources are available
+		if cpu > self.available_cpu:
+			frappe.throw(f"Not enough CPU resources available. Required: {cpu}, Available: {self.available_cpu}")
+			
+		if memory_mb > self.available_memory:
+			frappe.throw(f"Not enough memory available. Required: {memory_mb}MB, Available: {self.available_memory}MB")
+			
+		if disk_gb > self.available_disk:
+			frappe.throw(f"Not enough disk space available. Required: {disk_gb}GB, Available: {self.available_disk}GB")
+		
+		# Create allocation record
+		allocation = frappe.new_doc("Resource Allocation")
+		allocation.host = self.name
+		allocation.purpose = purpose
+		allocation.allocated_cpu = cpu
+		allocation.allocated_memory = memory_mb
+		allocation.allocated_disk = disk_gb
+		allocation.allocation_date = frappe.utils.now()
+		
+		if allocation_reference:
+			allocation.reference_type, allocation.reference_name = allocation_reference.split(":")
+			
+		allocation.insert()
+		
+		# Update available resources
+		self.available_cpu = self.available_cpu - cpu
+		self.available_memory = self.available_memory - memory_mb
+		self.available_disk = self.available_disk - disk_gb
+		
+		# Update allocation counts
+		self.total_allocations = frappe.db.count("Resource Allocation", {"host": self.name})
+		self.allocated_cpu = self.total_cpu - self.available_cpu
+		self.allocated_memory = self.total_memory - self.available_memory
+		self.allocated_disk = self.total_disk - self.available_disk
+		
+		self.save()
+		
+		return {
+			"status": "Success",
+			"message": f"Resources allocated successfully for {purpose}",
+			"allocation_id": allocation.name
+		}
+		
+	@frappe.whitelist()
+	def deallocate_resources(self, allocation_id):
+		"""Release allocated resources"""
+		if not frappe.db.exists("Resource Allocation", allocation_id):
+			frappe.throw(f"Allocation {allocation_id} not found")
+			
+		allocation = frappe.get_doc("Resource Allocation", allocation_id)
+		
+		if allocation.host != self.name:
+			frappe.throw(f"Allocation {allocation_id} does not belong to this host")
+			
+		# Update available resources
+		self.available_cpu = self.available_cpu + allocation.allocated_cpu
+		self.available_memory = self.available_memory + allocation.allocated_memory
+		self.available_disk = self.available_disk + allocation.allocated_disk
+		
+		# Delete allocation record
+		frappe.delete_doc("Resource Allocation", allocation_id)
+		
+		# Update allocation counts
+		self.total_allocations = frappe.db.count("Resource Allocation", {"host": self.name})
+		self.allocated_cpu = self.total_cpu - self.available_cpu
+		self.allocated_memory = self.total_memory - self.available_memory
+		self.allocated_disk = self.total_disk - self.available_disk
+		
+		self.save()
+		
+		return {
+			"status": "Success",
+			"message": f"Resources deallocated successfully"
+		}
+		
+	@frappe.whitelist()
+	def get_resource_report(self):
+		"""Get detailed resource allocation report for this host"""
+		allocations = frappe.get_all(
+			"Resource Allocation",
+			filters={"host": self.name},
+			fields=["name", "purpose", "allocated_cpu", "allocated_memory", "allocated_disk", 
+				   "allocation_date", "reference_type", "reference_name"]
+		)
+		
+		# Calculate usage percentages
+		cpu_usage_percent = (self.allocated_cpu / self.total_cpu * 100) if self.total_cpu else 0
+		memory_usage_percent = (self.allocated_memory / self.total_memory * 100) if self.total_memory else 0
+		disk_usage_percent = (self.allocated_disk / self.total_disk * 100) if self.total_disk else 0
+		
+		return {
+			"status": "Success",
+			"total_resources": {
+				"cpu": self.total_cpu,
+				"memory_mb": self.total_memory,
+				"disk_gb": self.total_disk
+			},
+			"allocated_resources": {
+				"cpu": self.allocated_cpu,
+				"memory_mb": self.allocated_memory,
+				"disk_gb": self.allocated_disk
+			},
+			"available_resources": {
+				"cpu": self.available_cpu,
+				"memory_mb": self.available_memory,
+				"disk_gb": self.available_disk
+			},
+			"usage_percentages": {
+				"cpu": round(cpu_usage_percent, 2),
+				"memory": round(memory_usage_percent, 2),
+				"disk": round(disk_usage_percent, 2)
+			},
+			"allocations": allocations
+		} 

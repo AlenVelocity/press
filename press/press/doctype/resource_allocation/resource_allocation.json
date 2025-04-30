@@ -1,0 +1,127 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:RSRC-{####}",
+ "creation": "2025-04-30 14:22:35.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "host",
+  "purpose",
+  "allocated_cpu",
+  "allocated_memory",
+  "allocated_disk",
+  "column_break_6",
+  "allocation_date",
+  "reference_section",
+  "reference_type",
+  "reference_name"
+ ],
+ "fields": [
+  {
+   "fieldname": "host",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Host",
+   "options": "Bare Metal Host",
+   "reqd": 1
+  },
+  {
+   "fieldname": "purpose",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Purpose",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "allocated_cpu",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Allocated CPU",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "description": "In MB",
+   "fieldname": "allocated_memory",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Allocated Memory (MB)",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "description": "In GB",
+   "fieldname": "allocated_disk",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Allocated Disk (GB)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_6",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "allocation_date",
+   "fieldtype": "Datetime",
+   "label": "Allocation Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reference_section",
+   "fieldtype": "Section Break",
+   "label": "Reference"
+  },
+  {
+   "fieldname": "reference_type",
+   "fieldtype": "Link",
+   "label": "Reference Type",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference Name",
+   "options": "reference_type"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-04-30 14:22:35.000000",
+ "modified_by": "Administrator",
+ "module": "Press",
+ "name": "Resource Allocation",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Press Admin",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+} 
