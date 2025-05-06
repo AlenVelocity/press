@@ -1,0 +1,42 @@
+---
+# Playbook for triggering a backup on a bare metal host
+- name: Trigger manual backup
+  hosts: all
+  become: yes
+  gather_facts: yes
+  vars:
+    host_ip: "{{ host_ip }}"
+    ssh_user: "{{ ssh_user }}"
+    ssh_port: "{{ ssh_port }}"
+    backup_destination: "{{ backup_destination | default('/var/backups/bare-metal') }}"
+    manual_trigger: "{{ manual_trigger | default(true) }}"
+
+  tasks:
+    - name: Check if backup script exists
+      stat:
+        path: /usr/local/bin/backup-scripts/host_backup.sh
+      register: backup_script
+
+    - name: Fail if backup is not configured
+      fail:
+        msg: "Backup is not configured on this host. Please run setup_backup first."
+      when: not backup_script.stat.exists
+
+    - name: Create timestamped directory for manual backup
+      file:
+        path: "{{ backup_destination }}/manual-{{ ansible_date_time.date }}-{{ ansible_date_time.time | regex_replace(':', '') }}"
+        state: directory
+        mode: '0750'
+        owner: root
+        group: root
+      when: manual_trigger | bool
+
+    - name: Execute backup script
+      shell: /usr/local/bin/backup-scripts/host_backup.sh
+      args:
+        executable: /bin/bash
+      register: backup_result
+      
+    - name: Display backup result
+      debug:
+        msg: "{{ backup_result.stdout_lines }}" 

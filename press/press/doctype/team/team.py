@@ -19,6 +19,7 @@ from press.utils import get_valid_teams_for_user, has_role, log_error
 from press.utils.billing import (
 	get_frappe_io_connection,
 	get_stripe,
+	is_frappe_auth_disabled,
 	process_micro_debit_test_charge,
 )
 from press.utils.telemetry import capture
@@ -47,8 +48,10 @@ class Team(Document):
 		child_team_members: DF.Table[ChildTeamMember]
 		code_servers_enabled: DF.Check
 		communication_emails: DF.Table[CommunicationEmail]
+		company_logo: DF.Attach | None
 		country: DF.Link | None
 		currency: DF.Link | None
+		customers: DF.SmallText | None
 		database_access_enabled: DF.Check
 		default_payment_method: DF.Link | None
 		discounts: DF.Table[InvoiceDiscount]
@@ -57,10 +60,12 @@ class Team(Document):
 		enabled: DF.Check
 		enforce_2fa: DF.Check
 		erpnext_partner: DF.Check
+		extend_payment_due_suspension: DF.Check
 		frappe_partnership_date: DF.Date | None
 		free_account: DF.Check
 		free_credits_allocated: DF.Check
 		github_access_token: DF.Data | None
+		introduction: DF.SmallText | None
 		is_code_server_user: DF.Check
 		is_developer: DF.Check
 		is_saas_user: DF.Check
@@ -74,6 +79,7 @@ class Team(Document):
 		partner_commission: DF.Percent
 		partner_email: DF.Data | None
 		partner_referral_code: DF.Data | None
+		partner_tier: DF.Data | None
 		partnership_date: DF.Date | None
 		payment_mode: DF.Literal["", "Card", "Prepaid Credits", "Paid By Partner"]
 		razorpay_enabled: DF.Check
@@ -89,6 +95,7 @@ class Team(Document):
 		team_title: DF.Data | None
 		user: DF.Link | None
 		via_erpnext: DF.Check
+		website_link: DF.Data | None
 	# end: auto-generated types
 
 	dashboard_fields = (
@@ -444,7 +451,6 @@ class Team(Document):
 
 		self.validate_payment_mode()
 		self.update_draft_invoice_payment_mode()
-		self.validate_partnership_date()
 		self.set_notification_emails()
 
 		if (
@@ -455,20 +461,6 @@ class Team(Document):
 		):
 			self.update_billing_details_on_frappeio()
 
-	def validate_partnership_date(self):
-		if self.erpnext_partner or not self.partnership_date:
-			return
-
-		if partner_email := self.partner_email:
-			frappe_partnership_date = frappe.db.get_value(
-				"Team",
-				{"enabled": 1, "erpnext_partner": 1, "partner_email": partner_email},
-				"frappe_partnership_date",
-			)
-			if frappe_partnership_date and frappe_partnership_date > frappe.utils.getdate(
-				self.partnership_date
-			):
-				frappe.throw("Partnership date cannot be less than the partnership date of the partner")
 
 	def update_draft_invoice_payment_mode(self):
 		if self.has_value_changed("payment_mode"):
@@ -518,6 +510,9 @@ class Team(Document):
 
 	def get_partnership_start_date(self):
 		if frappe.flags.in_test:
+			return frappe.utils.getdate()
+
+		if is_frappe_auth_disabled():
 			return frappe.utils.getdate()
 
 		client = get_frappe_io_connection()
@@ -667,6 +662,9 @@ class Team(Document):
 		if frappe.flags.in_install:
 			return
 
+		if is_frappe_auth_disabled():
+			return
+
 		try:
 			frappeio_client = get_frappe_io_connection()
 		except FrappeioServerNotSet as e:
@@ -713,6 +711,7 @@ class Team(Document):
 		mandate_id,
 		mandate_reference,
 		set_default=False,
+		verified_with_micro_charge=False,
 	):
 		stripe = get_stripe()
 		payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
@@ -730,6 +729,7 @@ class Team(Document):
 				"stripe_setup_intent_id": setup_intent_id,
 				"stripe_mandate_id": mandate_id if mandate_id else None,
 				"stripe_mandate_reference": mandate_reference if mandate_reference else None,
+				"is_verified_with_micro_charge": verified_with_micro_charge,
 			}
 		)
 		doc.insert()
@@ -975,6 +975,12 @@ class Team(Document):
 
 	def get_partner_level(self):
 		# fetch partner level from frappe.io
+		if frappe.flags.in_install:
+			return None
+
+		if is_frappe_auth_disabled():
+			return None
+
 		client = get_frappe_io_connection()
 		response = client.session.get(
 			f"{client.url}/api/method/get_partner_level",

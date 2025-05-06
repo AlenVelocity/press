@@ -57,6 +57,7 @@ class PressSettings(Document):
 		default_outgoing_pass: DF.Data | None
 		disable_agent_job_deduplication: DF.Check
 		disable_auto_retry: DF.Check
+		disable_frappe_auth: DF.Check
 		disable_physical_backup: DF.Check
 		docker_registry_namespace: DF.Data | None
 		docker_registry_password: DF.Data | None
@@ -100,8 +101,10 @@ class PressSettings(Document):
 		mailgun_api_key: DF.Data | None
 		max_allowed_screenshots: DF.Int
 		max_concurrent_physical_restorations: DF.Int
+		max_failed_backup_attempts_in_a_day: DF.Int
 		micro_debit_charge_inr: DF.Currency
 		micro_debit_charge_usd: DF.Currency
+		minimum_rebuild_memory: DF.Int
 		monitor_server: DF.Link | None
 		monitor_token: DF.Data | None
 		ngrok_auth_token: DF.Data | None
@@ -161,6 +164,7 @@ class PressSettings(Document):
 		twilio_phone_number: DF.Phone | None
 		usage_record_creation_batch_size: DF.Int
 		usd_rate: DF.Float
+		use_agent_job_callbacks: DF.Check
 		use_app_cache: DF.Check
 		use_delta_builds: DF.Check
 		use_staging_ca: DF.Check
@@ -186,6 +190,9 @@ class PressSettings(Document):
 						frappe.throw(f"Invalid email address: {email}")
 			else:
 				frappe.throw("Email Recipients List can not be empty")
+
+		if self.minimum_rebuild_memory < 2:
+			frappe.throw("Minimum rebuild memory needs to be 2 GB or more.")
 
 	@frappe.whitelist()
 	def create_stripe_webhook(self):

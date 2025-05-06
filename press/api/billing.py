@@ -217,6 +217,25 @@ def details():
 
 
 @frappe.whitelist()
+def fetch_invoice_items(invoice):
+	return frappe.get_all(
+		"Invoice Item",
+		{"parent": invoice, "parenttype": "Invoice"},
+		[
+			"document_type",
+			"document_name",
+			"rate",
+			"quantity",
+			"amount",
+			"plan",
+			"description",
+			"discount",
+			"site",
+		],
+	)
+
+
+@frappe.whitelist()
 def get_customer_details(team):
 	"""This method is called by frappe.io for creating Customer and Address"""
 	team_doc = frappe.db.get_value("Team", team, "*")
@@ -227,7 +246,7 @@ def get_customer_details(team):
 
 
 @frappe.whitelist()
-def create_payment_intent_for_micro_debit(payment_method_name):
+def create_payment_intent_for_micro_debit():
 	team = get_current_team(True)
 	stripe = get_stripe()
 
@@ -243,7 +262,6 @@ def create_payment_intent_for_micro_debit(payment_method_name):
 		description="Micro-Debit Card Test Charge",
 		metadata={
 			"payment_for": "micro_debit_test_charge",
-			"payment_method_name": payment_method_name,
 		},
 	)
 	return {"client_secret": intent["client_secret"]}
@@ -429,7 +447,7 @@ def get_unpaid_invoices():
 		order_by="creation asc",
 	)
 
-	return unpaid_invoices
+	return unpaid_invoices  # noqa: RET504
 
 
 @frappe.whitelist()
@@ -446,7 +464,7 @@ def change_payment_mode(mode):
 	if team.billing_team and mode != "Paid By Partner":
 		team.billing_team = ""
 	team.save()
-	return None
+	return
 
 
 @frappe.whitelist()
@@ -555,6 +573,7 @@ def setup_intent_success(setup_intent, address=None):
 		setup_intent.mandate,
 		mandate_reference,
 		set_default=True,
+		verified_with_micro_charge=True,
 	)
 	if address:
 		address = frappe._dict(address)

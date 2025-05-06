@@ -12,6 +12,7 @@ from frappe.model.document import Document
 from frappe.utils import get_url_to_form
 from frappe.utils.background_jobs import enqueue_doc
 from frappe.utils.data import add_to_date
+from frappe.utils.synchronization import filelock
 
 from press.exceptions import AlertRuleNotEnabled
 from press.press.doctype.incident.incident import INCIDENT_ALERT, INCIDENT_SCOPE
@@ -106,8 +107,6 @@ class AlertmanagerWebhookLog(Document):
 				self.name,
 				"validate_and_create_incident",
 				enqueue_after_commit=True,
-				job_id=f"validate_and_create_incident:{self.incident_scope}:{self.alert}",
-				deduplicate=True,
 			)
 		if not frappe.get_cached_value("Prometheus Alert Rule", self.alert, "silent"):
 			send_telegram_notifs = frappe.db.get_single_value("Press Settings", "send_telegram_notifications")
@@ -298,12 +297,14 @@ class AlertmanagerWebhookLog(Document):
 
 	def create_incident(self):
 		try:
-			if self.ongoing_incident_exists():
-				return
-			incident = frappe.new_doc("Incident")
-			incident.alert = self.alert
-			incident.server = self.server
-			incident.cluster = self.cluster
-			incident.save()
+			with filelock(f"incident_creation_{self.server}"):
+				frappe.db.commit()  # To avoid reading old data
+				if self.ongoing_incident_exists():
+					return
+				incident = frappe.new_doc("Incident")
+				incident.alert = self.alert
+				incident.server = self.server
+				incident.cluster = self.cluster
+				incident.save()
 		except Exception:
 			log_error("Incident creation failed")

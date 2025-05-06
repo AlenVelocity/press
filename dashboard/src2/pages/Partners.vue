@@ -2,9 +2,7 @@
 	<div class="sticky top-0 z-10 shrink-0">
 		<Header>
 			<FBreadcrumbs
-				:items="[
-					{ label: 'Partner Portal', route: { name: 'Partner Portal' } },
-				]"
+				:items="[{ label: 'Partnership', route: { name: 'Partnership' } }]"
 			/>
 		</Header>
 		<TabsWithRouter
@@ -49,6 +47,10 @@ export default {
 					route: { name: 'PartnerApprovalRequests' },
 				},
 				{
+					label: 'Partner  Certificates',
+					route: { name: 'PartnerCertificates' },
+				},
+				{
 					label: 'Local Payment Setup',
 					route: { name: 'LocalPaymentSetup' },
 					condition: () =>
@@ -56,6 +58,11 @@ export default {
 							this.$team.doc.country === 'Kenya' &&
 								this.$team.doc.mpesa_enabled,
 						),
+				},
+				{
+					label: 'Partner Payout',
+					route: { name: 'PartnerPayout' },
+					condition: () => Boolean(this.$team.doc.erpnext_partner),
 				},
 			],
 		};

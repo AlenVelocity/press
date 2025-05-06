@@ -10,6 +10,7 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 import frappe
+import frappe.utils
 import requests
 from frappe.utils.password import get_decrypted_password
 from requests.exceptions import HTTPError
@@ -824,8 +825,13 @@ class Agent:
 			reference_name=reference_name,
 		)
 
-	def update_site_status(self, server, site, status, skip_reload=False):
-		data = {"status": status, "skip_reload": skip_reload}
+	def update_site_status(self, server: str, site: str, status, skip_reload=False):
+		extra_domains = frappe.get_all(
+			"Site Domain",
+			{"site": site, "tls_certificate": ("is", "not set"), "status": "Active", "domain": ("!=", site)},
+			pluck="domain",
+		)
+		data = {"status": status, "skip_reload": skip_reload, "extra_domains": extra_domains}
 		_server = frappe.get_doc("Server", server)
 		ip = _server.ip if _server.is_self_hosted else _server.private_ip
 		return self.create_agent_job(
@@ -951,12 +957,12 @@ class Agent:
 		if not agent_job:
 			raise
 
-		reason = status_code = None
+		status_code = getattr(result, "status_code", "Unknown")
 		with suppress(TypeError, ValueError):
 			reason = json.dumps(result.json(), indent=4, sort_keys=True) if result else None
 
 		message = f"""
-Status Code: {status_code or "Unknown"}\n
+Status Code: {status_code}\n
 Response: {reason or getattr(result, "text", "Unknown")}
 """
 		self.log_failure_reason(agent_job, message)
@@ -1148,6 +1154,9 @@ Response: {reason or getattr(result, "text", "Unknown")}
 	def fetch_bench_status(self, bench):
 		return self.get(f"benches/{bench}/status")
 
+	def get_snapshot(self, bench: str):
+		return self.get(f"process-snapshot/{bench}")
+
 	def run_after_migrate_steps(self, site):
 		data = {
 			"admin_password": site.get_password("admin_password"),
@@ -1213,12 +1222,12 @@ Response: {reason or getattr(result, "text", "Unknown")}
 		return None
 
 	def run_build(self, data: dict):
-		reference_name = data.get("deploy_candidate")
+		reference_name = data.get("deploy_candidate_build")
 		return self.create_agent_job(
 			"Run Remote Builder",
 			"builder/build",
 			data=data,
-			reference_doctype="Deploy Candidate",
+			reference_doctype="Deploy Candidate Build",
 			reference_name=reference_name,
 		)
 
@@ -1321,6 +1330,19 @@ Response: {reason or getattr(result, "text", "Unknown")}
 			f"benches/{site.bench}/sites/{site.name}/database/kill-process/{id}",
 			data={
 				"mariadb_root_password": get_mariadb_root_password(site),
+			},
+		)
+
+	def fetch_database_variables(self):
+		if self.server_type != "Database Server":
+			return NotImplementedError("Only Database Server supports this method")
+		return self.post(
+			"database/variables",
+			data={
+				"private_ip": frappe.get_value("Database Server", self.server, "private_ip"),
+				"mariadb_root_password": get_decrypted_password(
+					"Database Server", self.server, "mariadb_root_password"
+				),
 			},
 		)
 
